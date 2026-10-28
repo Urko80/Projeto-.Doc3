@@ -427,13 +427,13 @@ static esp_err_t RegisterUri(httpd_handle_t server, const char* uri, httpd_metho
 
 } // namespace
 
-extern "C" void DocWebServoApiStart(void) {
-    if (s_started) return;
+extern "C" bool DocWebServoApiStart(void) {
+    if (s_started) return true;
 
     s_mutex = xSemaphoreCreateMutex();
     if (s_mutex == nullptr) {
         ESP_LOGE(TAG, "Falha ao criar mutex");
-        return;
+        return false;
     }
 
     esp_err_t err = PcaInitialize();
@@ -444,7 +444,7 @@ extern "C" void DocWebServoApiStart(void) {
         // DocWebServoApiStop libera tudo o que tiver sido criado antes do erro.
         DocWebServoApiStop();
         // DOC FIM — limpeza de inicialização parcial
-        return;
+        return false;
     }
 
     s_last_wheel_command = xTaskGetTickCount();
@@ -453,7 +453,7 @@ extern "C" void DocWebServoApiStart(void) {
         // DOC INÍCIO — desfaz I²C/PCA9685 se a tarefa de segurança não iniciar
         DocWebServoApiStop();
         // DOC FIM — limpeza após falha do watchdog
-        return;
+        return false;
     }
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
@@ -467,7 +467,7 @@ extern "C" void DocWebServoApiStart(void) {
         // quando o servidor HTTP não consegue iniciar.
         DocWebServoApiStop();
         // DOC FIM — limpeza após falha do servidor HTTP
-        return;
+        return false;
     }
 
     // DOC INÍCIO — registra todas as rotas e trata qualquer falha
@@ -501,13 +501,14 @@ extern "C" void DocWebServoApiStart(void) {
             // DOC INÍCIO — rollback de inicialização HTTP incompleta
             DocWebServoApiStop();
             // DOC FIM — rollback de rotas incompletas
-            return;
+            return false;
         }
     }
     // DOC FIM — registro seguro de rotas
 
     s_started = true;
     ESP_LOGI(TAG, "Painel web: http://<IP-DO-DOC>/ | API: /api/status");
+    return true;
 }
 
 extern "C" void DocWebServoApiStop(void) {
