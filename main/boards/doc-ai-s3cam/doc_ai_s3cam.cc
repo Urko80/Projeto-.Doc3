@@ -6,6 +6,7 @@
 #include "display/lcd_display.h"
 #include "display/custom_eyes.h"
 #include "web_servo_api.h"
+#include "doc_i2c_bus.h"
 
 #include "esp32_camera.h"
 #include <atomic>
@@ -221,6 +222,16 @@ public:
 
     DocAiS3Cam() : boot_button_(BOOT_BUTTON_GPIO) {
         ESP_LOGI(TAG, "DOC AI S3CAM board startup");
+
+        // DOC INÍCIO — cria o barramento I²C compartilhado uma única vez
+        // PCA9685 e sensores I²C usam o mesmo barramento durante a vida da placa.
+        esp_err_t i2c_err = DocI2cBusInitialize();
+        if (i2c_err != ESP_OK) {
+            ESP_LOGE(TAG, "Falha ao inicializar barramento I2C compartilhado: %s",
+                     esp_err_to_name(i2c_err));
+        }
+        // DOC FIM — inicialização do barramento compartilhado
+
         InitializeButtons();
         InitializeDisplay();
 
