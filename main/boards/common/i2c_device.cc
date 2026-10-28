@@ -6,12 +6,16 @@
 
 #define TAG "I2cDevice"
 
-I2cDevice::I2cDevice(i2c_master_bus_handle_t i2c_bus, uint8_t addr)
-    : i2c_bus_(i2c_bus), device_address_(addr) {
+// DOC INÍCIO — aceita velocidade I²C por dispositivo
+// Mantém 400 kHz como padrão para não alterar os módulos já existentes.
+// Novos dispositivos no barramento do DOC podem solicitar explicitamente 100 kHz.
+I2cDevice::I2cDevice(i2c_master_bus_handle_t i2c_bus, uint8_t addr,
+                     uint32_t scl_speed_hz)
+    : i2c_bus_(i2c_bus), device_address_(addr), i2c_device_(nullptr) {
     i2c_device_config_t i2c_device_cfg = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
         .device_address = addr,
-        .scl_speed_hz = 400 * 1000,
+        .scl_speed_hz = scl_speed_hz,
         .scl_wait_us = 0,
         .flags =
             {
@@ -21,6 +25,7 @@ I2cDevice::I2cDevice(i2c_master_bus_handle_t i2c_bus, uint8_t addr)
     ESP_ERROR_CHECK(i2c_master_bus_add_device(i2c_bus, &i2c_device_cfg, &i2c_device_));
     assert(i2c_device_ != NULL);
 }
+// DOC FIM — velocidade I²C por dispositivo
 
 void I2cDevice::WriteReg(uint8_t reg, uint8_t value) {
     uint8_t buffer[2] = {reg, value};
