@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdbool.h>
+
 /**
  * DOC INÍCIO — API web para controle seguro do PCA9685
  *
@@ -18,8 +20,13 @@
 extern "C" {
 #endif
 
-/** Inicializa I²C/PCA9685 e inicia o servidor HTTP. Idempotente. */
-void DocWebServoApiStart(void);
+/**
+ * DOC INÍCIO — retorno explícito da inicialização
+ * Retorna true somente se I²C/PCA9685, watchdog, servidor HTTP e rotas iniciarem.
+ * Retorna false se houver falha; nesse caso os recursos parciais são liberados.
+ * DOC FIM
+ */
+bool DocWebServoApiStart(void);
 
 /** Para motores contínuos e encerra o servidor HTTP. */
 void DocWebServoApiStop(void);
