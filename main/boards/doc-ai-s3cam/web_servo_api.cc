@@ -470,21 +470,41 @@ extern "C" void DocWebServoApiStart(void) {
         return;
     }
 
-    // DOC INÍCIO — página inicial para acesso direto pelo celular
-    RegisterUri(s_http, "/", HTTP_GET, WebUiHandler);
-    RegisterUri(s_http, "/index.html", HTTP_GET, WebUiHandler);
-    // DOC FIM — página inicial
+    // DOC INÍCIO — registra todas as rotas e trata qualquer falha
+    // Se uma rota falhar, encerra o servidor e libera os recursos já criados.
+    // Isso evita anunciar a API como pronta com endpoints faltando.
+    struct UriRegistration {
+        const char* uri;
+        httpd_method_t method;
+        esp_err_t (*handler)(httpd_req_t*);
+    };
+    const UriRegistration routes[] = {
+        {"/", HTTP_GET, WebUiHandler},
+        {"/index.html", HTTP_GET, WebUiHandler},
+        {"/api/status", HTTP_GET, StatusHandler},
+        {"/api/servo", HTTP_POST, ServoHandler},
+        {"/api/legs", HTTP_POST, LegsHandler},
+        {"/api/wheels", HTTP_POST, WheelsHandler},
+        {"/api/stop", HTTP_POST, StopHandler},
+        {"/api/status", HTTP_OPTIONS, OptionsHandler},
+        {"/api/servo", HTTP_OPTIONS, OptionsHandler},
+        {"/api/legs", HTTP_OPTIONS, OptionsHandler},
+        {"/api/wheels", HTTP_OPTIONS, OptionsHandler},
+        {"/api/stop", HTTP_OPTIONS, OptionsHandler},
+    };
 
-    RegisterUri(s_http, "/api/status", HTTP_GET, StatusHandler);
-    RegisterUri(s_http, "/api/servo", HTTP_POST, ServoHandler);
-    RegisterUri(s_http, "/api/legs", HTTP_POST, LegsHandler);
-    RegisterUri(s_http, "/api/wheels", HTTP_POST, WheelsHandler);
-    RegisterUri(s_http, "/api/stop", HTTP_POST, StopHandler);
-    RegisterUri(s_http, "/api/status", HTTP_OPTIONS, OptionsHandler);
-    RegisterUri(s_http, "/api/servo", HTTP_OPTIONS, OptionsHandler);
-    RegisterUri(s_http, "/api/legs", HTTP_OPTIONS, OptionsHandler);
-    RegisterUri(s_http, "/api/wheels", HTTP_OPTIONS, OptionsHandler);
-    RegisterUri(s_http, "/api/stop", HTTP_OPTIONS, OptionsHandler);
+    for (const auto& route : routes) {
+        err = RegisterUri(s_http, route.uri, route.method, route.handler);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "Falha ao registrar rota %s (método %d): %s",
+                     route.uri, static_cast<int>(route.method), esp_err_to_name(err));
+            // DOC INÍCIO — rollback de inicialização HTTP incompleta
+            DocWebServoApiStop();
+            // DOC FIM — rollback de rotas incompletas
+            return;
+        }
+    }
+    // DOC FIM — registro seguro de rotas
 
     s_started = true;
     ESP_LOGI(TAG, "Painel web: http://<IP-DO-DOC>/ | API: /api/status");
