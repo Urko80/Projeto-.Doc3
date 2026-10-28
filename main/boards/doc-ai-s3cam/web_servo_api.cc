@@ -29,6 +29,7 @@
 
 #include "web_servo_api.h"
 #include "config.h"
+#include "doc_i2c_bus.h"
 
 #include <algorithm>
 #include <cstring>
@@ -126,16 +127,12 @@ static esp_err_t PcaSetChannelOff(uint8_t channel) {
 // DOC FIM
 
 static esp_err_t PcaInitialize() {
-    i2c_master_bus_config_t bus_cfg = {};
-    bus_cfg.i2c_port = I2C_NUM_0;
-    bus_cfg.sda_io_num = PCA_SDA_GPIO;
-    bus_cfg.scl_io_num = PCA_SCL_GPIO;
-    bus_cfg.clk_source = I2C_CLK_SRC_DEFAULT;
-    bus_cfg.glitch_ignore_cnt = 7;
-    bus_cfg.flags.enable_internal_pullup = true;
-
-    esp_err_t err = i2c_new_master_bus(&bus_cfg, &s_i2c_bus);
+    // DOC INÍCIO — utiliza o barramento compartilhado da placa
+    // O proprietário do barramento permanece ativo mesmo quando a API web para.
+    // Assim, sensores I²C podem compartilhar SDA/SCL sem perder o barramento.
+    esp_err_t err = DocI2cBusGet(&s_i2c_bus);
     if (err != ESP_OK) return err;
+    // DOC FIM — barramento I²C compartilhado
 
     i2c_device_config_t dev_cfg = {};
     dev_cfg.dev_addr_length = I2C_ADDR_BIT_LEN_7;
@@ -532,10 +529,11 @@ extern "C" void DocWebServoApiStop(void) {
         i2c_master_bus_rm_device(s_pca);
         s_pca = nullptr;
     }
-    if (s_i2c_bus != nullptr) {
-        i2c_del_master_bus(s_i2c_bus);
-        s_i2c_bus = nullptr;
-    }
+    // DOC INÍCIO — não destrói o barramento compartilhado
+    // DocI2cBusGet() mantém a propriedade do barramento durante a vida da placa.
+    // Cada módulo remove somente os dispositivos que ele próprio registrou.
+    s_i2c_bus = nullptr;
+    // DOC FIM — preservação do barramento compartilhado
     if (s_mutex != nullptr) {
         vSemaphoreDelete(s_mutex);
         s_mutex = nullptr;
