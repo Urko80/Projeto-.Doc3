@@ -129,8 +129,13 @@ private:
     void HandleNetworkEvent(NetworkEvent event, const std::string& data) {
         if (event == NetworkEvent::Connected && !servo_api_started_) {
             ESP_LOGI(TAG, "Wi-Fi conectado; iniciando API web de servos");
-            DocWebServoApiStart();
-            servo_api_started_ = true;
+            // DOC INÍCIO — só marca a API como ativa após inicialização confirmada
+            // Se a inicialização falhar, uma conexão posterior poderá tentar novamente.
+            servo_api_started_ = DocWebServoApiStart();
+            if (!servo_api_started_) {
+                ESP_LOGE(TAG, "API web de servos não iniciou; aguardará nova conexão");
+            }
+            // DOC FIM — estado real da API web
         } else if (event == NetworkEvent::Disconnected && servo_api_started_) {
             // Em desconexão, tenta parar os motores e encerra o servidor.
             DocWebServoApiStop();
