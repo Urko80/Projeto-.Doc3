@@ -57,8 +57,6 @@ namespace {
 static const char* TAG = "doc_web_servo_api";
 
 // DOC INÍCIO — hardware e limites verificados no Projeto .DOC
-constexpr gpio_num_t PCA_SDA_GPIO = PCA9685_SDA_GPIO;
-constexpr gpio_num_t PCA_SCL_GPIO = PCA9685_SCL_GPIO;
 constexpr uint8_t PCA9685_ADDRESS = PCA9685_I2C_ADDRESS;
 constexpr uint32_t I2C_FREQUENCY_HZ = PCA9685_I2C_FREQUENCY_HZ;
 constexpr uint16_t SERVO_MIN_US = DOC_LEG_SERVO_MIN_US;
