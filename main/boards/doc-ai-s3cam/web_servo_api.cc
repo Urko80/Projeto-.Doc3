@@ -439,12 +439,20 @@ extern "C" void DocWebServoApiStart(void) {
     esp_err_t err = PcaInitialize();
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Falha ao inicializar PCA9685: %s", esp_err_to_name(err));
+        // DOC INÍCIO — limpeza de recursos parciais após falha no I²C/PCA9685
+        // PcaInitialize pode falhar depois de criar o barramento ou registrar o dispositivo.
+        // DocWebServoApiStop libera tudo o que tiver sido criado antes do erro.
+        DocWebServoApiStop();
+        // DOC FIM — limpeza de inicialização parcial
         return;
     }
 
     s_last_wheel_command = xTaskGetTickCount();
     if (xTaskCreate(WheelWatchdogTask, "doc_wheel_wd", 2048, nullptr, 4, &s_watchdog_task) != pdPASS) {
         ESP_LOGE(TAG, "Falha ao criar watchdog das rodas");
+        // DOC INÍCIO — desfaz I²C/PCA9685 se a tarefa de segurança não iniciar
+        DocWebServoApiStop();
+        // DOC FIM — limpeza após falha do watchdog
         return;
     }
 
@@ -455,6 +463,10 @@ extern "C" void DocWebServoApiStart(void) {
     err = httpd_start(&s_http, &config);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Falha ao iniciar servidor HTTP: %s", esp_err_to_name(err));
+        // DOC INÍCIO — libera watchdog, PCA9685, barramento I²C e mutex
+        // quando o servidor HTTP não consegue iniciar.
+        DocWebServoApiStop();
+        // DOC FIM — limpeza após falha do servidor HTTP
         return;
     }
 
