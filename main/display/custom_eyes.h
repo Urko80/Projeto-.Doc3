@@ -9,6 +9,7 @@
 #define CUSTOM_EYES_H
 
 #include "lvgl.h"
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -31,6 +32,9 @@ void CustomEyes_SetState(eyes_state_t state);
 
 // DOC — Recebe uma expressão textual, como "happy", "sad" ou "neutral".
 void CustomEyes_SetExpression(const char *expression);
+
+// DOC — Alterna os olhos entre a faixa superior (câmera aberta) e o centro da tela.
+void CustomEyes_SetCameraMode(bool enabled);
 
 // DOC — Solicita uma piscada imediata.
 void CustomEyes_BlinkNow(void);

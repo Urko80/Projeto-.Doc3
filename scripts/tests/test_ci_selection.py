@@ -27,13 +27,14 @@ class CiSelectionTests(unittest.TestCase):
             path.write_text(json.dumps(manifest))
             return build._load_representative_variants(self.variants, path)
 
-    def test_reviewed_list_has_18_builds_and_all_chip_targets(self):
+    def test_reviewed_list_has_19_builds_and_all_chip_targets(self):
         selected = self.load_manifest(self.manifest)
-        self.assertEqual(len(selected), 18)
+        self.assertEqual(len(selected), 19)
         self.assertEqual(
             {item["target"] for item in selected},
             {item["target"] for item in self.variants},
         )
+        self.assertIn("doc-ai-s3cam", {item["board"] for item in selected})
         self.assertEqual(
             len({item.get("ci_name", item["full_name"]) for item in selected}),
             len(selected),
@@ -66,7 +67,7 @@ class CiSelectionTests(unittest.TestCase):
         for changes in (paths, list(reversed(paths))):
             with self.subTest(changes=changes):
                 selected = build._select_variants_for_changes(self.variants, changes)
-                self.assertEqual(len(selected), 19)
+                self.assertEqual(len(selected), 20)
                 self.assertIn("otto-robot", {v["board"] for v in selected})
 
     def test_representative_board_changes_do_not_duplicate_default_build(self):
@@ -74,7 +75,7 @@ class CiSelectionTests(unittest.TestCase):
             self.variants,
             ["main/application.cc", "main/boards/bread-compact-wifi/config.h"],
         )
-        self.assertEqual(len(selected), 19)
+        self.assertEqual(len(selected), 20)
         self.assertEqual(
             sorted(v["name"] for v in selected if v["board"] == "bread-compact-wifi"),
             ["bread-compact-wifi", "bread-compact-wifi-128x64"],

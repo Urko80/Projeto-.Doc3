@@ -10,6 +10,10 @@ on:
   pull_request:
     branches:
       - main
+      # DOC INÍCIO — Validar PRs que usam a interface web embutida como base.
+      - feature/doc-embedded-web-ui
+      - feature/doc-camera-restore
+      # DOC FIM — Gatilho de compilação para a linha de integração do DOC.
 
 permissions:
   contents: read

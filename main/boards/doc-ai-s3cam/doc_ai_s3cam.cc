@@ -1,10 +1,16 @@
-
 #include "wifi_board.h"
 #include "codecs/no_audio_codec.h"
 #include "application.h"
 #include "button.h"
 #include "config.h"
 #include "display/lcd_display.h"
+#include "display/custom_eyes.h"
+#include "web_servo_api.h"
+
+#include "esp32_camera.h"
+#include <atomic>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 #include <driver/spi_master.h>
 #include <esp_lcd_panel_io.h>
@@ -19,6 +25,94 @@ class DocAiS3Cam : public WifiBoard {
 private:
     Button boot_button_;
     Display* display_ = nullptr;
+    bool servo_api_started_ = false;
+
+    // DOC INÍCIO — Estado da câmera OV3660, aberta somente quando solicitada.
+    Camera* camera_ = nullptr;
+    std::string camera_vision_url_;
+    std::string camera_vision_token_;
+    TaskHandle_t camera_preview_task_ = nullptr;
+    std::atomic<bool> camera_preview_running_{false};
+    std::atomic<bool> camera_preview_stop_requested_{false};
+
+    void InitializeCamera() {
+        camera_config_t camera_config = {};
+        camera_config.ledc_channel = LEDC_CHANNEL_0;
+        camera_config.ledc_timer = LEDC_TIMER_0;
+        camera_config.pin_d0 = CAMERA_PIN_D0;
+        camera_config.pin_d1 = CAMERA_PIN_D1;
+        camera_config.pin_d2 = CAMERA_PIN_D2;
+        camera_config.pin_d3 = CAMERA_PIN_D3;
+        camera_config.pin_d4 = CAMERA_PIN_D4;
+        camera_config.pin_d5 = CAMERA_PIN_D5;
+        camera_config.pin_d6 = CAMERA_PIN_D6;
+        camera_config.pin_d7 = CAMERA_PIN_D7;
+        camera_config.pin_xclk = CAMERA_PIN_XCLK;
+        camera_config.pin_pclk = CAMERA_PIN_PCLK;
+        camera_config.pin_vsync = CAMERA_PIN_VSYNC;
+        camera_config.pin_href = CAMERA_PIN_HREF;
+        camera_config.pin_sccb_sda = CAMERA_PIN_SIOD;
+        camera_config.pin_sccb_scl = CAMERA_PIN_SIOC;
+        camera_config.pin_pwdn = CAMERA_PIN_PWDN;
+        camera_config.pin_reset = CAMERA_PIN_RESET;
+        camera_config.xclk_freq_hz = XCLK_FREQ_HZ;
+        camera_config.pixel_format = PIXFORMAT_RGB565;
+        camera_config.frame_size = FRAMESIZE_QQVGA;
+        camera_config.jpeg_quality = 12;
+        camera_config.fb_count = 2;
+        camera_config.fb_location = CAMERA_FB_IN_PSRAM;
+        camera_config.grab_mode = CAMERA_GRAB_LATEST;
+
+        camera_ = new Esp32Camera(camera_config);
+        camera_->SetExplainUrl(camera_vision_url_, camera_vision_token_);
+        camera_->SetVFlip(true);
+        ESP_LOGI(TAG, "OV3660 camera initialization requested");
+    }
+
+    static void CameraPreviewTask(void* arg) {
+        auto* self = static_cast<DocAiS3Cam*>(arg);
+        while (!self->camera_preview_stop_requested_.load()) {
+            Camera* camera = self->camera_;
+            if (camera != nullptr) {
+                camera->Capture();
+            }
+            vTaskDelay(pdMS_TO_TICKS(250));
+        }
+        self->camera_preview_running_.store(false);
+        self->camera_preview_task_ = nullptr;
+        vTaskDelete(nullptr);
+    }
+
+    void StartCameraPreviewTask() {
+        if (camera_ == nullptr || camera_preview_running_.load()) {
+            return;
+        }
+
+        camera_preview_stop_requested_.store(false);
+        camera_preview_running_.store(true);
+        BaseType_t result = xTaskCreate(
+            CameraPreviewTask, "doc_cam_preview", 4096, this, 2, &camera_preview_task_);
+        if (result != pdPASS) {
+            camera_preview_running_.store(false);
+            camera_preview_task_ = nullptr;
+            ESP_LOGE(TAG, "Failed to start camera preview task");
+        }
+    }
+
+    void StopCameraPreviewTask() {
+        if (!camera_preview_running_.load()) {
+            camera_preview_task_ = nullptr;
+            return;
+        }
+
+        camera_preview_stop_requested_.store(true);
+        while (camera_preview_running_.load()) {
+            vTaskDelay(pdMS_TO_TICKS(10));
+        }
+        camera_preview_task_ = nullptr;
+        camera_preview_stop_requested_.store(false);
+    }
+    // DOC FIM — Estado e ciclo de vida da câmera.
 
     void InitializeButtons() {
         boot_button_.OnClick([this]() {
@@ -30,6 +124,20 @@ private:
             app.ToggleChatState();
         });
     }
+
+    // DOC INÍCIO — API web inicia somente após a rede estar conectada
+    void HandleNetworkEvent(NetworkEvent event, const std::string& data) {
+        if (event == NetworkEvent::Connected && !servo_api_started_) {
+            ESP_LOGI(TAG, "Wi-Fi conectado; iniciando API web de servos");
+            DocWebServoApiStart();
+            servo_api_started_ = true;
+        } else if (event == NetworkEvent::Disconnected && servo_api_started_) {
+            // Em desconexão, tenta parar os motores e encerra o servidor.
+            DocWebServoApiStop();
+            servo_api_started_ = false;
+        }
+    }
+    // DOC FIM
 
     void InitializeDisplay() {
         spi_bus_config_t bus_config = {};
@@ -91,10 +199,28 @@ private:
     }
 
 public:
+    // DOC INÍCIO — preservar o callback da aplicação e tratar eventos da placa
+    // Application::Initialize() chama este método depois do construtor.
+    // Encadeamos o callback da API web com o callback principal, evitando que
+    // o registro posterior da aplicação substitua o tratamento de rede do DOC.
+    void SetNetworkEventCallback(NetworkEventCallback callback) override {
+        WifiBoard::SetNetworkEventCallback(
+            [this, callback](NetworkEvent event, const std::string& data) {
+                HandleNetworkEvent(event, data);
+                if (callback) {
+                    callback(event, data);
+                }
+            });
+    }
+    // DOC FIM
+
     DocAiS3Cam() : boot_button_(BOOT_BUTTON_GPIO) {
         ESP_LOGI(TAG, "DOC AI S3CAM board startup");
         InitializeButtons();
         InitializeDisplay();
+
+        // A Application registra seu callback durante Initialize().
+        // O encadeamento do callback é implementado em SetNetworkEventCallback().
 
         ESP_LOGI(TAG,
                  "I2S mic BCLK=%d WS=%d DIN=%d; speaker BCLK=%d WS=%d DOUT=%d",
@@ -103,6 +229,97 @@ public:
                  AUDIO_I2S_SPK_GPIO_BCLK, AUDIO_I2S_SPK_GPIO_LRCK,
                  AUDIO_I2S_SPK_GPIO_DOUT);
     }
+
+    ~DocAiS3Cam() override {
+        CloseCamera();
+        if (servo_api_started_) {
+            DocWebServoApiStop();
+        }
+    }
+
+    // DOC INÍCIO — API pública da câmera OV3660.
+    bool HasCamera() override {
+        return true;
+    }
+
+    bool SupportsCameraLifecycle() override {
+        return true;
+    }
+
+    Camera* GetCamera() override {
+        return camera_;
+    }
+
+    Camera* OpenCamera() override {
+        if (camera_ == nullptr) {
+            InitializeCamera();
+            if (camera_ == nullptr || !camera_->Capture()) {
+                ESP_LOGE(TAG, "Failed to initialize or capture from OV3660");
+                delete camera_;
+                camera_ = nullptr;
+                return nullptr;
+            }
+        }
+        camera_->SetExplainUrl(camera_vision_url_, camera_vision_token_);
+        // DOC INÍCIO — Com a câmera aberta, olhos na faixa y=0..31 e imagem em y=32..159.
+        if (display_ != nullptr) {
+            static_cast<LcdDisplay*>(display_)->SetCameraPreviewMode(true);
+        }
+        CustomEyes_SetCameraMode(true);
+        // DOC FIM — Layout da câmera.
+        StartCameraPreviewTask();
+        return camera_;
+    }
+
+    bool CloseCamera() override {
+        StopCameraPreviewTask();
+        delete camera_;
+        camera_ = nullptr;
+        if (display_ != nullptr) {
+            display_->SetPreviewImage(nullptr);
+            // DOC — Restaura a prévia e os olhos ao centro após fechar a câmera.
+            static_cast<LcdDisplay*>(display_)->SetCameraPreviewMode(false);
+        }
+        CustomEyes_SetCameraMode(false);
+        ESP_LOGI(TAG, "OV3660 camera closed");
+        return true;
+    }
+
+    void SetCameraVisionEndpoint(const std::string& url, const std::string& token) override {
+        camera_vision_url_ = url;
+        camera_vision_token_ = token;
+        if (camera_ != nullptr) {
+            camera_->SetExplainUrl(camera_vision_url_, camera_vision_token_);
+        }
+    }
+
+    std::expected<std::string, std::string> CaptureAndExplain(
+        const std::string& question) override {
+        const bool camera_was_open = camera_ != nullptr;
+        if (!camera_was_open && OpenCamera() == nullptr) {
+            return std::unexpected("Failed to open OV3660 camera");
+        }
+
+        // Pause preview during photo analysis so two tasks do not capture at once.
+        StopCameraPreviewTask();
+        if (camera_ == nullptr || !camera_->Capture()) {
+            if (camera_was_open) {
+                StartCameraPreviewTask();
+            } else {
+                CloseCamera();
+            }
+            return std::unexpected("Failed to capture photo");
+        }
+
+        auto result = camera_->Explain(question);
+        if (camera_was_open) {
+            StartCameraPreviewTask();
+        } else {
+            CloseCamera();
+        }
+        return result;
+    }
+    // DOC FIM — API pública da câmera OV3660.
 
     AudioCodec* GetAudioCodec() override {
         static NoAudioCodecSimplex audio_codec(

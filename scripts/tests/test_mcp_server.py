@@ -69,6 +69,13 @@ class McpServerTest(unittest.TestCase):
                 };
                 inline void vTaskDelay(int) { std::abort(); }
                 #define pdMS_TO_TICKS(value) (value)
+                // DOC INÍCIO — Stub da prioridade usado pela ferramenta MCP de câmera.
+                // No teste de host não existe FreeRTOS; a classe real só ajusta prioridade.
+                class TaskPriorityReset {
+                public:
+                    explicit TaskPriorityReset(int) {}
+                };
+                // DOC FIM — Stub de TaskPriorityReset.
             ''',
             "esp_system.h": r'''
                 #pragma once
@@ -91,6 +98,7 @@ class McpServerTest(unittest.TestCase):
                 #include <cstdint>
                 #include <cstdlib>
                 #include <string>
+                #include <expected>
                 struct AudioCodec { void SetOutputVolume(int) { std::abort(); } };
                 struct Backlight { void SetBrightness(uint8_t, bool) { std::abort(); } };
                 struct Camera {
@@ -106,6 +114,14 @@ class McpServerTest(unittest.TestCase):
                     AudioCodec* GetAudioCodec() { std::abort(); }
                     Backlight* GetBacklight() { return nullptr; }
                     Camera* GetCamera() { return nullptr; }
+                    bool HasCamera() { return false; }
+                    bool SupportsCameraLifecycle() { return false; }
+                    Camera* OpenCamera() { return nullptr; }
+                    bool CloseCamera() { return false; }
+                    void SetCameraVisionEndpoint(const std::string&, const std::string&) {}
+                    std::expected<std::string, std::string> CaptureAndExplain(const std::string&) {
+                        return std::unexpected("Camera unavailable in host test");
+                    }
                 };
             ''',
             "display.h": "",
@@ -154,7 +170,10 @@ class McpServerTest(unittest.TestCase):
             raise unittest.SkipTest("requires C++23, cJSON and mbedTLS development headers: "
                                     + probe.stderr)
         cls.executable = build / "mcp_test"
-        subprocess.run(
+        # DOC INÍCIO — Exibir o erro real caso a compilação do teste falhe.
+        # capture_output continua evitando poluir a saída em caso de sucesso; em caso de
+        # falha, stdout/stderr são incluídos na exceção para facilitar o diagnóstico no CI.
+        compile_result = subprocess.run(
             compiler + ["-std=c++23", "-fno-exceptions", *cjson_flags,
                         f"-I{build}", f"-I{ROOT / 'main'}",
                         f"-I{ROOT / 'main/boards/common'}",
@@ -162,8 +181,16 @@ class McpServerTest(unittest.TestCase):
                         str(ROOT / "main/mcp_server.cc"),
                         str(ROOT / "main/boards/common/press_to_talk_mcp_tool.cc"),
                         *libs, "-o", str(cls.executable)],
-            check=True, capture_output=True, text=True,
+            capture_output=True, text=True,
         )
+        if compile_result.returncode != 0:
+            raise RuntimeError(
+                "MCP host test compilation failed.\n"
+                f"Compiler stdout:\n{compile_result.stdout}\n"
+                f"Compiler stderr:\n{compile_result.stderr}"
+            )
+        # DOC FIM — Diagnóstico de compilação do teste MCP.
+
 
     def responses(self, requests, custom_sender=True):
         process = subprocess.run(

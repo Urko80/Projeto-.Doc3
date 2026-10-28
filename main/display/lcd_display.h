@@ -40,6 +40,9 @@ protected:
 // Evita inicializar duas vezes o módulo de olhos na mesma instância.
 bool custom_eyes_initialized_ = false;
 
+// DOC — Quando true, a prévia da câmera ocupa o quadrado inferior 128x128.
+bool camera_preview_mode_ = false;
+
 
 
 
@@ -60,6 +63,8 @@ public:
     virtual void RemoveChatMessage(const char* role, const char* content) override;
     virtual void ClearChatMessages() override;
     virtual void SetPreviewImage(std::unique_ptr<LvglImage> image) override;
+    // DOC — Alterna entre a prévia normal e o layout de câmera 128x128 em y=32.
+    void SetCameraPreviewMode(bool enabled);
     virtual void SetupUI() override;
     // Add theme switching function
     virtual void SetTheme(Theme* theme) override;

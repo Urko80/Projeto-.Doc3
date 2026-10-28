@@ -396,6 +396,42 @@ bool LcdDisplay::Lock(int timeout_ms) { return lvgl_port_lock(timeout_ms); }
 
 void LcdDisplay::Unlock() { lvgl_port_unlock(); }
 
+/* DOC INÍCIO — Layout dedicado à prévia da câmera do DOC. */
+void LcdDisplay::SetCameraPreviewMode(bool enabled) {
+    DisplayLockGuard lock(this);
+    camera_preview_mode_ = enabled;
+
+    if (preview_image_ == nullptr) {
+        return;  // SetupUI ainda não criou o objeto da prévia.
+    }
+
+    if (enabled) {
+        /* DOC — Reserva y=0..31 para os olhos e y=32..159 para a imagem. */
+        lv_obj_set_size(preview_image_, width_, height_ - 32);
+        lv_obj_align(preview_image_, LV_ALIGN_TOP_MID, 0, 32);
+
+        /* DOC — Se já houver um quadro, atualiza a escala sem esperar o próximo frame. */
+        if (preview_image_cached_ != nullptr) {
+            const auto img_dsc = preview_image_cached_->image_dsc();
+            if (img_dsc->header.w > 0 && img_dsc->header.h > 0) {
+                const lv_coord_t zoom_w = (width_ * 256) / img_dsc->header.w;
+                const lv_coord_t zoom_h = ((height_ - 32) * 256) / img_dsc->header.h;
+                const lv_coord_t zoom = zoom_w > zoom_h ? zoom_w : zoom_h;
+                lv_image_set_scale(preview_image_, zoom);
+                lv_obj_set_size(preview_image_,
+                    (img_dsc->header.w * zoom + 128) / 256,
+                    (img_dsc->header.h * zoom + 128) / 256);
+                lv_obj_align(preview_image_, LV_ALIGN_TOP_MID, 0, 32);
+            }
+        }
+    } else {
+        /* DOC — Ao fechar a câmera, restaura o espaço normal da prévia. */
+        lv_obj_set_size(preview_image_, width_ / 2, height_ / 2);
+        lv_obj_align(preview_image_, LV_ALIGN_CENTER, 0, 0);
+    }
+}
+/* DOC FIM — Layout dedicado à prévia da câmera do DOC. */
+
 #if CONFIG_USE_WECHAT_MESSAGE_STYLE
 void LcdDisplay::SetupUI() {
     // Prevent duplicate calls - if already called, return early
@@ -1132,8 +1168,23 @@ void LcdDisplay::SetPreviewImage(std::unique_ptr<LvglImage> image) {
     auto img_dsc = preview_image_cached_->image_dsc();
     lv_image_set_src(preview_image_, img_dsc);
     if (img_dsc->header.w > 0 && img_dsc->header.h > 0) {
-        // zoom factor 0.5
-        lv_image_set_scale(preview_image_, 128 * width_ / img_dsc->header.w);
+        if (camera_preview_mode_) {
+            /* DOC — Escala para preencher 128x128; o excesso horizontal é recortado pela tela. */
+            const lv_coord_t view_width = width_;
+            const lv_coord_t view_height = height_ - 32;
+            const lv_coord_t zoom_w = (view_width * 256) / img_dsc->header.w;
+            const lv_coord_t zoom_h = (view_height * 256) / img_dsc->header.h;
+            const lv_coord_t zoom = zoom_w > zoom_h ? zoom_w : zoom_h;
+            lv_image_set_scale(preview_image_, zoom);
+            /* DOC — Mantém o tamanho renderizado e centraliza o recorte horizontal. */
+            lv_obj_set_size(preview_image_,
+                (img_dsc->header.w * zoom + 128) / 256,
+                (img_dsc->header.h * zoom + 128) / 256);
+            lv_obj_align(preview_image_, LV_ALIGN_TOP_MID, 0, 32);
+        } else {
+            // DOC — Mantém o dimensionamento original fora do modo de câmera.
+            lv_image_set_scale(preview_image_, 128 * width_ / img_dsc->header.w);
+        }
     }
 
     // Hide emoji_box_
@@ -1236,6 +1287,30 @@ if (custom_eyes_initialized_ && emotion != nullptr) {
 
 
 
+
+    // DOC INÍCIO — Impedir que emojis antigos substituam os olhos DOC.
+    // As expressões já foram encaminhadas ao motor de olhos acima.
+    // Escondemos a interface legada e encerramos antes do código de emojis/GIFs.
+    if (custom_eyes_initialized_) {
+        DisplayLockGuard lock(this);
+
+        if (gif_controller_) {
+            gif_controller_->Stop();
+            gif_controller_.reset();
+        }
+
+        if (emoji_box_ != nullptr) {
+            lv_obj_add_flag(emoji_box_, LV_OBJ_FLAG_HIDDEN);
+        }
+        if (emoji_label_ != nullptr) {
+            lv_obj_add_flag(emoji_label_, LV_OBJ_FLAG_HIDDEN);
+        }
+        if (emoji_image_ != nullptr) {
+            lv_obj_add_flag(emoji_image_, LV_OBJ_FLAG_HIDDEN);
+        }
+        return;
+    }
+    // DOC FIM — A tela usa os olhos animados, sem emoji legado.
 
     if (emoji_image_ == nullptr) {
         if (setup_ui_called_) {

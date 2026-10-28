@@ -1099,6 +1099,14 @@ if(CONFIG_IDF_TARGET_ESP32S3)
     list(APPEND SOURCES "boards/common/esp32_camera.cc")
 endif()
 
+# DOC INÍCIO — incorporar a interface HTML ao firmware somente na placa DOC
+# O arquivo é embutido na imagem para que celulares acessem http://IP-DO-DOC/.
+set(DOC_WEB_UI_FILES "")
+if(CONFIG_BOARD_TYPE_DOC_AI_S3CAM)
+    list(APPEND DOC_WEB_UI_FILES "boards/doc-ai-s3cam/web_control.html")
+endif()
+# DOC FIM — interface web embutida
+
 set(MAIN_PRIV_REQUIRES_EXTRA "")
 if(CONFIG_XIAOZHI_NETWORK_ETHERNET AND CONFIG_XIAOZHI_ETH_PHY_IP101)
     list(APPEND MAIN_PRIV_REQUIRES_EXTRA espressif__ip101)
@@ -1127,6 +1135,7 @@ if(CONFIG_BOARD_TYPE_ESP32_P4_FUNCTION_EV_BOARD)
 endif()
 idf_component_register(SRCS ${SOURCES}
                     EMBED_FILES ${LANG_SOUNDS} ${COMMON_SOUNDS}
+                    EMBED_TXTFILES ${DOC_WEB_UI_FILES}
                     INCLUDE_DIRS ${INCLUDE_DIRS}
                     WHOLE_ARCHIVE
                     PRIV_REQUIRES
@@ -1138,6 +1147,7 @@ idf_component_register(SRCS ${SOURCES}
                         esp_driver_uart
                         esp_driver_spi
                         esp_driver_i2c
+                        esp_http_server
                         esp_driver_i2s
                         esp_driver_ledc
                         esp_driver_jpeg

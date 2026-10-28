@@ -71,6 +71,51 @@ void McpServer::AddCommonTools() {
                 });
     }
 
+    // DOC INÍCIO — Ferramentas da câmera registradas mesmo quando ela está fechada.
+    // A placa inicializa a OV3660 sob demanda; não capture um ponteiro nulo no boot.
+    if (board.HasCamera()) {
+        if (board.SupportsCameraLifecycle()) {
+            AddTool("self.camera.open",
+                    "Open the DOC camera and start its live preview. Use this when the user asks "
+                    "to open, turn on, or show the camera. Use self.camera.take_photo for visual "
+                    "questions about objects or scenes.",
+                    PropertyList(),
+                    [&board](const PropertyList&) -> ToolResult {
+                        if (board.OpenCamera() == nullptr) {
+                            return std::unexpected("Failed to open camera");
+                        }
+                        return true;
+                    });
+
+            AddTool("self.camera.close",
+                    "Close the DOC camera and stop its live preview when the user asks to close "
+                    "or turn off the camera.",
+                    PropertyList(),
+                    [&board](const PropertyList&) -> ToolResult {
+                        if (!board.CloseCamera()) {
+                            return std::unexpected("Failed to close camera");
+                        }
+                        return true;
+                    });
+        }
+
+        AddTool("self.camera.take_photo",
+                "Take a photo with the DOC camera and explain what is visible. Use this when "
+                "the user asks what the camera sees or asks you to inspect something. The camera "
+                "is opened temporarily if needed.",
+                PropertyList({Property("question", kPropertyTypeString)}),
+                [&board](const PropertyList& properties) -> ToolResult {
+                    TaskPriorityReset priority_reset(1);
+                    auto question = properties["question"].value<std::string>();
+                    auto result = board.CaptureAndExplain(question);
+                    if (!result) {
+                        return std::unexpected(std::move(result.error()));
+                    }
+                    return std::move(*result);
+                });
+    }
+    // DOC FIM — Ferramentas MCP da câmera.
+
 #ifdef HAVE_LVGL
     auto display = board.GetDisplay();
     if (display && display->GetTheme() != nullptr) {
@@ -89,31 +134,7 @@ void McpServer::AddCommonTools() {
                 });
     }
 
-    auto camera = board.GetCamera();
-    if (camera) {
-        AddTool("self.camera.take_photo",
-                "Always remember you have a camera. If the user asks you to see something, use "
-                "this tool to take a photo and then explain it.\n"
-                "Args:\n"
-                "  `question`: The question that you want to ask about the photo.\n"
-                "Return:\n"
-                "  A JSON object that provides the photo information.",
-                PropertyList({Property("question", kPropertyTypeString)}),
-                [camera](const PropertyList& properties) -> ToolResult {
-                    // Lower the priority to do the camera capture
-                    TaskPriorityReset priority_reset(1);
 
-                    if (!camera->Capture()) {
-                        return std::unexpected("Failed to capture photo");
-                    }
-                    auto question = properties["question"].value<std::string>();
-                    auto result = camera->Explain(question);
-                    if (!result) {
-                        return std::unexpected(std::move(result.error()));
-                    }
-                    return std::move(*result);
-                });
-    }
 #endif
 
     // Restore the original tools list to the end of the tools list
@@ -366,15 +387,14 @@ void McpServer::ParseCapabilities(const cJSON* capabilities) {
         auto url = cJSON_GetObjectItem(vision, "url");
         auto token = cJSON_GetObjectItem(vision, "token");
         if (cJSON_IsString(url)) {
-            auto camera = Board::GetInstance().GetCamera();
-            if (camera) {
-                std::string url_str = std::string(url->valuestring);
-                std::string token_str;
-                if (cJSON_IsString(token)) {
-                    token_str = std::string(token->valuestring);
-                }
-                camera->SetExplainUrl(url_str, token_str);
+            std::string url_str = std::string(url->valuestring);
+            std::string token_str;
+            if (cJSON_IsString(token)) {
+                token_str = std::string(token->valuestring);
             }
+            // DOC INÍCIO — Guardar a configuração mesmo se a câmera estiver fechada.
+            Board::GetInstance().SetCameraVisionEndpoint(url_str, token_str);
+            // DOC FIM
         }
     }
 }

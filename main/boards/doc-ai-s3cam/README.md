@@ -1,39 +1,67 @@
-# DOC AI S3CAM — XiaoZhi board
+# DOC AI S3CAM — placa XiaoZhi para Projeto .DOC
 
-## First milestone included
-- ESP32-S3 target.
-- XiaoZhi's native Wi-Fi/network/protocol path (`WifiBoard` + shared `Application`).
-- I2S simplex audio: MS3625 microphone and MAX98357A amplifier.
-- BOOT button: enter Wi-Fi configuration while starting; otherwise toggle chat.
+## Primeiro marco incluído
+- Alvo ESP32-S3.
+- Caminho de rede/protocolo nativo XiaoZhi (`WifiBoard` + `Application`).
+- Áudio I2S simplex: microfone MS3625 e amplificador MAX98357A.
+- Botão BOOT: configuração Wi-Fi durante a inicialização; nos demais estados alterna o chat.
+- API HTTP experimental para PCA9685, iniciada após evento de conexão Wi-Fi.
 
-## Confirmed audio wiring
-| Signal | GPIO |
+## Pinagem de áudio confirmada
+
+| Sinal | GPIO |
 |---|---:|
-| Microphone BCLK/SCK | 1 |
-| Microphone WS/LRCL | 2 |
-| Microphone DOUT | 3 |
+| Microfone BCLK/SCK | 1 |
+| Microfone WS/LRCL | 2 |
+| Microfone DOUT | 3 |
 | MAX98357A BCLK | 41 |
 | MAX98357A LRC | 42 |
 | MAX98357A DIN | 47 |
 
-## Display and camera status
-The ST7735 1.77" and OV3660 pin maps are recorded in `config.h`, but this first
-milestone intentionally does not initialize them. The XiaoZhi project has ST7789
-support in common examples, but calling its ST7789 initializer is not a verified
-ST7735 implementation. A real ST7735 driver/init sequence must be added before
-enabling the display. Camera initialization is also a separate milestone.
+## PCA9685 — pinagem e calibração inicial
 
-PCA9685 SDA/SCL are not guessed. Add them after confirming the actual wiring.
+| Sinal | Configuração |
+|---|---|
+| SDA | GPIO19 |
+| SCL | GPIO20 |
+| Endereço I²C | 0x40 |
+| Frequência I²C | 100 kHz |
+| Frequência PWM | 50 Hz |
+| CH0 / CH3 | SG90 pernas, faixa inicial 1250–1750 µs |
+| CH1 / CH2 | MG90S rodas, neutro 1705 µs |
 
-## Install into the XiaoZhi repository
-Run `install_board.ps1` from this package while PowerShell's current directory is
-the root of the local `xiaozhi-esp32` repository. The script copies the board and
-adds the board choice/build mapping without modifying existing board definitions.
+**Importante sobre USB:** GPIO19/GPIO20 também são USB D-/D+ no ESP32-S3. Com I²C nesses pinos, não usar USB nativo simultaneamente. Para gravação e serial, usar o conversor USB-UART externo, como já feito nos testes.
 
-Then build:
-```powershell
-python scripts/build.py doc-ai-s3cam --name doc-ai-s3cam
-```
+Os limites de pulso das pernas são uma faixa inicial validada em testes, não uma garantia de segurança para qualquer montagem. Os pulsos das rodas são calibrações medidas para os motores deste robô.
 
-This package has not been compiled against the user's local checkout. A successful
-build and physical audio/network test are still required.
+## Painel web embutido
+
+Depois de gravar o firmware com esta alteração e conectar o DOC ao Wi-Fi, abra `http://IP-DO-DOC/` em um celular ou computador conectado à mesma rede. A rota `/index.html` também serve o painel. A interface e a API usam a mesma porta HTTP (80), sem servidor separado no computador.
+
+## API HTTP experimental
+
+Quando a placa está conectada ao Wi-Fi, a API responde na porta 80 do endereço IP atribuído pelo roteador:
+
+| Método | Rota | Corpo / função |
+|---|---|---|
+| GET | `/api/status` | Estado e valores atuais |
+| POST | `/api/servo` | `{"channel":0,"pulse_us":1500}` ou canal 3 |
+| POST | `/api/legs` | `{"left_us":1500,"right_us":1500}` |
+| POST | `/api/wheels` | `{"left":"cw","right":"stop"}` |
+| POST | `/api/stop` | Para os dois motores de roda |
+
+Valores permitidos para rodas: `cw`, `ccw` e `stop`. Um watchdog solicita parada das rodas após 1,5 segundo sem atualização de comando. Isso é uma proteção de software, não um substituto para desligamento físico.
+
+### Segurança e limitações conhecidas
+- API ainda sem autenticação: usar somente em rede local confiável; não encaminhar a porta 80 para a internet.
+- A interface responsiva é embutida no firmware para a placa DOC e servida nas rotas `/` e `/index.html`; o arquivo-fonte é `web_control/index.html` e a cópia usada na compilação é `main/boards/doc-ai-s3cam/web_control.html`.
+- Ao abrir a página diretamente pelo IP da ESP32, o endereço da API é preenchido automaticamente com a mesma origem. Para usar a interface hospedada no computador, mantenha o IP do DOC no campo de conexão.
+- O estado de calibração não é persistido em NVS.
+- A API inicia o PCA9685 quando o Wi-Fi conecta. Se o driver I²C/PCA falhar, consultar o log serial antes de testar servos.
+- O código ainda não foi compilado nesta sessão nem validado na placa. Não gravar no firmware principal antes de concluir build e revisão.
+
+## Tela e câmera
+A pinagem ST7735 1,77" e OV3660 está registrada em `config.h`, mas inicialização e testes são marcos separados.
+
+## Compilação local
+No repositório local XiaoZhi/ESP-IDF, selecionar a placa `doc-ai-s3cam` e compilar conforme o fluxo de build do projeto. A compilação e o teste físico continuam pendentes.

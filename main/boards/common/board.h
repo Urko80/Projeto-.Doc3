@@ -73,6 +73,29 @@ public:
     virtual bool GetTemperature(float& esp32temp);
     virtual Display* GetDisplay();
     virtual Camera* GetCamera();
+
+    // DOC INÍCIO — API genérica para câmeras inicializadas sob demanda.
+    // O comportamento padrão preserva compatibilidade com placas sem câmera.
+    virtual bool HasCamera() { return GetCamera() != nullptr; }
+    virtual bool SupportsCameraLifecycle() { return false; }
+    virtual Camera* OpenCamera() { return GetCamera(); }
+    virtual bool CloseCamera() { return false; }
+    virtual void SetCameraVisionEndpoint(const std::string& url, const std::string& token) {
+        (void)url;
+        (void)token;
+    }
+    virtual std::expected<std::string, std::string> CaptureAndExplain(
+        const std::string& question) {
+        Camera* camera = OpenCamera();
+        if (camera == nullptr) {
+            return std::unexpected("Camera is not available");
+        }
+        if (!camera->Capture()) {
+            return std::unexpected("Failed to capture photo");
+        }
+        return camera->Explain(question);
+    }
+    // DOC FIM — API genérica de câmera.
     virtual NetworkInterface* GetNetwork() = 0;
     virtual void StartNetwork() = 0;
     virtual void SetNetworkEventCallback(NetworkEventCallback callback) { (void)callback; }

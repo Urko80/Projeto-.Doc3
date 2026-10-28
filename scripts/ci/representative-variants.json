@@ -29,6 +29,11 @@
       "reason": "Widely used basic S3 LCD configuration"
     },
     {
+      "board": "doc-ai-s3cam",
+      "name": "doc-ai-s3cam",
+      "reason": "DOC ESP32-S3 camera target; compile shared display and camera integration changes"
+    },
+    {
       "board": "nologo/xingzhi-cube-1.54tft-wifi",
       "name": "xingzhi-cube-1.54tft-wifi",
       "reason": "Widely used Xingzhi S3 board with Wi-Fi and LCD"

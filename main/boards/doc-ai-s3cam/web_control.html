@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10263a">
+  <title>.DOC Control Center</title>
+  <style>
+    /* DOC INÍCIO — ESTILO RESPONSIVO DO PAINEL */
+    :root { color-scheme: dark; --bg:#0b1724; --panel:#13263a; --panel2:#1a334b; --line:#2a4760; --text:#edf5fb; --muted:#a7bacb; --accent:#56c2a5; --warn:#f0c36a; --danger:#f07878; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:linear-gradient(135deg,#0b1724,#10283b); color:var(--text); font:16px/1.45 system-ui,-apple-system,Segoe UI,sans-serif; }
+    main { max-width:900px; margin:auto; padding:22px 16px 48px; }
+    header { display:flex; gap:14px; align-items:center; margin-bottom:22px; }
+    .logo { display:grid; place-items:center; width:52px; height:52px; border-radius:15px; background:#21465e; font-size:27px; }
+    h1 { font-size:clamp(1.35rem,4vw,2rem); margin:0; }
+    .sub,.muted { color:var(--muted); font-size:.9rem; }
+    .status { margin-left:auto; border:1px solid var(--line); border-radius:999px; padding:7px 10px; color:var(--warn); font-size:.78rem; white-space:nowrap; }
+    nav { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:16px; }
+    nav button { border:1px solid var(--line); background:var(--panel); color:var(--muted); padding:13px 8px; border-radius:12px; font-weight:700; cursor:pointer; }
+    nav button[aria-selected="true"] { background:#21465e; border-color:var(--accent); color:var(--text); }
+    section.panel { background:rgba(19,38,58,.94); border:1px solid var(--line); border-radius:18px; padding:18px; margin:12px 0; }
+    h2 { font-size:1.15rem; margin:0 0 5px; } h3 { font-size:1rem; margin:0; }
+    .servo { border-top:1px solid var(--line); padding-top:16px; margin-top:16px; }
+    .servo-head { display:flex; justify-content:space-between; gap:12px; align-items:center; }
+    output,.value { font-variant-numeric:tabular-nums; font-weight:800; color:var(--accent); }
+    input[type=range] { width:100%; accent-color:var(--accent); margin:18px 0 8px; }
+    .scale { display:flex; justify-content:space-between; color:var(--muted); font-size:.78rem; }
+    .actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+    button.action { border:1px solid var(--line); background:var(--panel2); color:var(--text); border-radius:10px; padding:10px 13px; font-weight:650; cursor:pointer; }
+    button.primary { background:var(--accent); color:#06251f; border-color:var(--accent); }
+    button.stop { background:#572b35; border-color:#a94c5b; }
+    button:disabled { opacity:.5; cursor:not-allowed; }
+    .grid2 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+    .notice { border-left:3px solid var(--warn); padding:10px 12px; background:#332d20; border-radius:7px; color:#f4dfb2; font-size:.88rem; }
+    .danger-note { border-left-color:var(--danger); background:#38232a; color:#ffd5d5; }
+    .row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .hidden { display:none !important; }
+    .status-line { min-height:1.4em; color:var(--muted); font-size:.88rem; margin-top:12px; }
+    .field { display:grid; gap:6px; margin:12px 0; }
+    input[type=number],input[type=text] { width:100%; background:#091521; color:var(--text); border:1px solid var(--line); border-radius:9px; padding:10px; }
+    @media(max-width:560px) { main{padding:16px 11px 32px} .status{font-size:.68rem;padding:6px 8px} .grid2{grid-template-columns:1fr} section.panel{padding:14px} }
+    /* DOC FIM — ESTILO RESPONSIVO DO PAINEL */
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="logo" aria-hidden="true">🤖</div>
+    <div><h1>.DOC Control Center</h1><div class="sub">Controle de pernas, rodas e calibração</div></div>
+    <div class="status" id="connectionBadge">Interface local</div>
+  </header>
+
+  <nav aria-label="Abas de controle">
+    <button type="button" data-tab="legs" aria-selected="true">🦿 Pernas</button>
+    <button type="button" data-tab="wheels" aria-selected="false">⚙️ Rodas</button>
+    <button type="button" data-tab="calibration" aria-selected="false">🎛️ Calibração</button>
+  </nav>
+
+  <section class="panel" id="connectionNotice">
+    <h2>Conectar ao DOC</h2>
+    <p class="muted">Digite o endereço IP mostrado pelo roteador para a placa. Abra esta página em um dispositivo na mesma rede Wi-Fi.</p>
+    <div class="field"><label for="deviceUrl">Endereço da API</label><input id="deviceUrl" type="text" inputmode="url" placeholder="http://192.168.0.14" value="http://192.168.0.14"></div>
+    <div class="actions"><button class="action primary" id="connectDevice">Testar conexão</button></div>
+    <p class="muted">A API ainda não tem autenticação. Use somente em rede confiável. Os comandos das rodas estão habilitados; faça os testes com as rodas suspensas e use PARAR RODAS para interromper o movimento.</p>
+  </section>
+
+  <!-- DOC INÍCIO — ABA PERNAS: SG90 NOS CANAIS 0 E 3 -->
+  <section class="panel tab-panel" id="tab-legs">
+    <h2>Controle das pernas</h2><p class="muted">SG90 · PCA9685 · canais 0 e 3</p>
+    <div class="notice">Comece com a mecânica livre e use pulsos conservadores. Os extremos definitivos ainda não foram validados.</div>
+    <div class="servo">
+      <div class="servo-head"><h3>Perna 1 · CH0</h3><output id="leg0Value">1500 µs</output></div>
+      <input id="leg0" type="range" min="1250" max="1750" step="10" value="1500" aria-label="Pulso da perna 1">
+      <div class="scale"><span>1250 µs</span><span>1500 µs · centro provisório</span><span>1750 µs</span></div>
+      <div class="actions"><button class="action" data-preset="leg0:1250">1250 µs</button><button class="action" data-preset="leg0:1500">Centro</button><button class="action" data-preset="leg0:1750">1750 µs</button><button class="action primary" data-send="leg0">Enviar CH0</button></div>
+    </div>
+    <div class="servo">
+      <div class="servo-head"><h3>Perna 2 · CH3</h3><output id="leg3Value">1500 µs</output></div>
+      <input id="leg3" type="range" min="1250" max="1750" step="10" value="1500" aria-label="Pulso da perna 2">
+      <div class="scale"><span>1250 µs</span><span>1500 µs · centro a validar</span><span>1750 µs</span></div>
+      <div class="actions"><button class="action" data-preset="leg3:1250">1250 µs</button><button class="action" data-preset="leg3:1500">Centro</button><button class="action" data-preset="leg3:1750">1750 µs</button><button class="action primary" data-send="leg3">Enviar CH3</button></div>
+    </div>
+    <div class="actions"><button class="action primary" data-send="legs">Enviar as duas pernas</button><button class="action" data-preset="leg0:1500,leg3:1500">Centralizar interface</button></div>
+  </section>
+  <!-- DOC FIM — ABA PERNAS -->
+
+  <!-- DOC INÍCIO — ABA RODAS: MG90S CONTÍNUOS NOS CANAIS 1 E 2 -->
+  <section class="panel tab-panel hidden" id="tab-wheels">
+    <h2>Controle das rodas</h2><p class="muted">MG90S contínuos · CH1 e CH2 · neutro inicial 1705 µs</p>
+    <div class="notice">A API atual aceita apenas sentidos discretos (CW, CCW ou STOP); o controle de velocidade variável ainda não está implementado. Teste com as rodas suspensas.</div>
+    <div class="servo">
+      <div class="servo-head"><h3>Velocidade variável</h3><output id="speedValue">Indisponível</output></div>
+      <input id="speed" type="range" min="0" max="30" step="5" value="0" aria-label="Velocidade variável não implementada" disabled>
+      <div class="scale"><span>Indisponível</span><span>Comandos discretos apenas</span></div>
+    </div>
+    <div class="field"><label for="direction">Comando das rodas</label><select id="direction" style="width:100%;background:#091521;color:var(--text);border:1px solid var(--line);border-radius:9px;padding:11px"><option value="forward">Ambas CW (horário)</option><option value="reverse">Ambas CCW (anti-horário — teste 1800 µs)</option><option value="left">Giro: esquerda CCW / direita CW</option><option value="right">Giro: esquerda CW / direita CCW</option></select></div>
+    <div class="actions"><button class="action primary" id="sendWheels">Enviar comando das rodas</button><button class="action stop" id="stopWheels">PARAR RODAS</button></div>
+  </section>
+  <!-- DOC FIM — ABA RODAS -->
+
+  <!-- DOC INÍCIO — ABA CALIBRAÇÃO: VALORES JÁ REGISTRADOS -->
+  <section class="panel tab-panel hidden" id="tab-calibration">
+    <h2>Registro de calibração</h2><p class="muted">Referência local; valores não são gravados no ESP32 nesta versão.</p>
+    <div class="grid2">
+      <div class="servo"><h3>MG90S · CH1</h3><p>Horário: <strong>1665 µs</strong></p><p>Neutro: <strong>1705 µs</strong></p><p>Anti-horário: <strong>1800 µs (testado nesta montagem)</strong></p></div>
+      <div class="servo"><h3>MG90S · CH2</h3><p>Horário: <strong>1665 µs</strong></p><p>Neutro: <strong>1705 µs</strong></p><p>Anti-horário: <strong>1800 µs (testado nesta montagem)</strong></p></div>
+      <div class="servo"><h3>SG90 · CH0</h3><p>Centro de teste: <strong>1500 µs</strong></p><p>Faixa inicial da API: <strong>1250–1750 µs</strong></p><p class="muted">Faixa limitada conservadoramente; confirmar no conjunto montado.</p></div>
+      <div class="servo"><h3>SG90 · CH3</h3><p>Centro testado: <strong>1500 µs</strong></p><p>Faixa inicial da API: <strong>1250–1750 µs</strong></p><p class="muted">Movimento suficiente no teste individual; limites finais dependem da mecânica montada.</p></div>
+    </div>
+    <div class="notice danger-note">Os controles desta versão não persistem valores. A gravação de calibração só será ativada após implementar validação no firmware e testar os limites mecânicos.</div>
+  </section>
+  <!-- DOC FIM — ABA CALIBRAÇÃO -->
+
+  <div class="status-line" id="statusLine" role="status" aria-live="polite">Pronto — confirme a conexão com o ESP32-S3 antes de enviar comandos.</div>
+  <p class="muted">Comandos HTTP documentados no próprio arquivo index.html. Confirme a conexão com a placa antes de movimentar o robô.</p>
+</main>
+<script>
+  /* DOC INÍCIO — NAVEGAÇÃO, CONEXÃO HTTP E COMANDOS DE PERNAS */
+  const statusLine = document.getElementById('statusLine');
+  const connectionBadge = document.getElementById('connectionBadge');
+
+  // Normaliza o endereço informado; não guarda credenciais ou dados em armazenamento.
+  function apiBase() {
+    return document.getElementById('deviceUrl').value.trim().replace(/\/+$/, '');
+  }
+
+  // Faz requisições JSON à API do ESP32 e apresenta erros de rede de forma explícita.
+  async function apiRequest(path, method = 'GET', payload = null) {
+    const options = { method, headers: { 'Content-Type': 'application/json' } };
+    if (payload !== null) options.body = JSON.stringify(payload);
+    const response = await fetch(apiBase() + path, options);
+    const data = await response.json();
+    if (!response.ok || data.ok === false) throw new Error(data.error || ('HTTP ' + response.status));
+    return data;
+  }
+
+  // Alterna as três abas sem recarregar a página.
+  document.querySelectorAll('[data-tab]').forEach(button => {
+    button.addEventListener('click', () => {
+      document.querySelectorAll('[data-tab]').forEach(tab => tab.setAttribute('aria-selected', String(tab === button)));
+      document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.add('hidden'));
+      document.getElementById('tab-' + button.dataset.tab).classList.remove('hidden');
+    });
+  });
+
+  // Atualiza os valores exibidos nos controles deslizantes.
+  [['leg0','leg0Value'], ['leg3','leg3Value']].forEach(([inputId, outputId]) => {
+    const input = document.getElementById(inputId);
+    const output = document.getElementById(outputId);
+    input.addEventListener('input', () => output.value = input.value + ' µs');
+  });
+  // DOC INÍCIO — velocidade variável ainda não implementada no firmware.
+  // O controle fica desativado para não sugerir que altera a velocidade física.
+  document.getElementById('speedValue').value = 'Indisponível';
+  // DOC FIM
+
+  // DOC INÍCIO — selecionar automaticamente o endereço do DOC
+  // Se a página vier da própria ESP32, a API usa a mesma origem.
+  // Se for aberta no servidor local do computador, mantém o IP configurado no campo.
+  (() => {
+    const host = window.location.hostname;
+    if (host && host !== 'localhost' && host !== '127.0.0.1') {
+      document.getElementById('deviceUrl').value = window.location.origin;
+    }
+  })();
+  // DOC FIM — seleção automática do endereço da API
+
+  // Testa a conectividade consultando o endpoint de status.
+  document.getElementById('connectDevice').addEventListener('click', async () => {
+    try {
+      const state = await apiRequest('/api/status');
+      connectionBadge.textContent = 'API conectada';
+      connectionBadge.style.color = 'var(--accent)';
+      statusLine.textContent = 'API respondeu. PCA9685: ' + state.pca9685 + '; PWM: ' + state.frequency_hz + ' Hz.';
+    } catch (error) {
+      connectionBadge.textContent = 'Sem conexão';
+      connectionBadge.style.color = 'var(--danger)';
+      statusLine.textContent = 'Falha ao conectar: ' + error.message + '. Confira IP, Wi-Fi e log serial.';
+    }
+  });
+
+  // Presets alteram apenas os valores locais; o envio exige clicar em um botão de comando.
+  document.querySelectorAll('[data-preset]').forEach(button => {
+    button.addEventListener('click', () => {
+      button.dataset.preset.split(',').forEach(pair => {
+        const [id, value] = pair.split(':');
+        const input = document.getElementById(id);
+        input.value = value;
+        input.dispatchEvent(new Event('input'));
+      });
+      statusLine.textContent = 'Preset preparado. Clique em Enviar para aplicar ao hardware.';
+    });
+  });
+
+  // Envia somente os canais SG90 CH0 e CH3, com limites também verificados no firmware.
+  document.querySelectorAll('[data-send]').forEach(button => button.addEventListener('click', async () => {
+    try {
+      if (button.dataset.send === 'leg0' || button.dataset.send === 'leg3') {
+        const channel = button.dataset.send === 'leg0' ? 0 : 3;
+        const inputId = channel === 0 ? 'leg0' : 'leg3';
+        await apiRequest('/api/servo', 'POST', { channel, pulse_us: Number(document.getElementById(inputId).value) });
+      } else if (button.dataset.send === 'legs') {
+        await apiRequest('/api/legs', 'POST', {
+          left_us: Number(document.getElementById('leg0').value),
+          right_us: Number(document.getElementById('leg3').value)
+        });
+      }
+      statusLine.textContent = 'Comando de perna enviado e confirmado pela API.';
+    } catch (error) {
+      statusLine.textContent = 'Comando não confirmado: ' + error.message;
+    }
+  }));
+
+  // DOC INÍCIO — enviar comandos discretos aceitos por POST /api/wheels
+  // CW usa 1665 µs; CCW usa o valor experimental 1800 µs; STOP usa 1705 µs.
+  // A API não recebe velocidade variável, por isso o slider não altera os pulsos.
+  document.getElementById('sendWheels').addEventListener('click', async () => {
+    const commands = {
+      forward: { left: 'cw', right: 'cw' },
+      reverse: { left: 'ccw', right: 'ccw' },
+      left: { left: 'ccw', right: 'cw' },
+      right: { left: 'cw', right: 'ccw' }
+    };
+    const direction = document.getElementById('direction').value;
+    try {
+      await apiRequest('/api/wheels', 'POST', commands[direction]);
+      statusLine.textContent = 'Comando enviado e confirmado pela API: esquerda=' + commands[direction].left + '; direita=' + commands[direction].right + '.';
+    } catch (error) {
+      statusLine.textContent = 'Comando das rodas não confirmado: ' + error.message;
+    }
+  });
+  // DOC FIM — envio de comandos das rodas
+
+  // A parada envia um comando real; se não houver resposta, o status informa a falha.
+  document.getElementById('stopWheels').addEventListener('click', async () => {
+    try {
+      await apiRequest('/api/stop', 'POST', {});
+      statusLine.textContent = 'API confirmou a parada das duas rodas.';
+    } catch (error) {
+      statusLine.textContent = 'Parada não confirmada pela API: ' + error.message + '. Desligue a alimentação dos servos se houver movimento.';
+    }
+  });
+  /* DOC FIM — NAVEGAÇÃO, CONEXÃO HTTP E COMANDOS DE PERNAS */
+</script>
+</body>
+</html>
