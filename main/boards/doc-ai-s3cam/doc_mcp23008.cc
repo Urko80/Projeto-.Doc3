@@ -18,7 +18,10 @@ static const char* TAG = "doc_mcp23008";
 
 // DOC INÍCIO — ciclo de vida do dispositivo MCP23008
 DocMcp23008::~DocMcp23008() {
-    Deinitialize();
+    // A rotina registra a falha e mantém o handle enquanto o objeto existir.
+    // Em encerramento explícito, o chamador pode verificar o esp_err_t e tentar
+    // novamente antes de destruir a instância.
+    (void)Deinitialize();
 }
 
 esp_err_t DocMcp23008::Initialize(i2c_master_bus_handle_t bus, uint8_t address) {
@@ -141,17 +144,28 @@ esp_err_t DocMcp23008::ReadPin(uint8_t pin, bool* level) {
 }
 // DOC FIM — configuração e leitura de entrada
 
-// DOC INÍCIO — encerramento sem remover o barramento compartilhado
-void DocMcp23008::Deinitialize() {
-    if (device_ != nullptr) {
-        const esp_err_t err = i2c_master_bus_rm_device(device_);
-        if (err != ESP_OK) {
-            ESP_LOGW(TAG, "Falha ao remover MCP23008: %s", esp_err_to_name(err));
-        }
+// DOC INÍCIO — encerramento seguro do dispositivo sem remover o barramento
+esp_err_t DocMcp23008::Deinitialize() {
+    if (device_ == nullptr) {
+        // Estado já encerrado: mantém a operação idempotente.
+        bus_ = nullptr;
+        address_ = 0;
+        return ESP_OK;
     }
 
+    const esp_err_t err = i2c_master_bus_rm_device(device_);
+    if (err != ESP_OK) {
+        // IMPORTANTE: não apagar os handles em caso de falha.
+        // O chamador pode inspecionar o erro e tentar Deinitialize() novamente.
+        ESP_LOGE(TAG, "Falha ao remover MCP23008 em 0x%02X: %s",
+                 address_, esp_err_to_name(err));
+        return err;
+    }
+
+    // Só limpar o estado interno depois da remoção confirmada.
     device_ = nullptr;
     bus_ = nullptr;
     address_ = 0;
+    return ESP_OK;
 }
-// DOC FIM — encerramento do dispositivo
+// DOC FIM — encerramento seguro do dispositivo
