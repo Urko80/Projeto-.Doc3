@@ -61,9 +61,16 @@ esp_err_t DocMcp23008::Initialize(i2c_master_bus_handle_t bus, uint8_t address) 
 
 // DOC INÍCIO — acesso a registradores com retorno explícito de erro
 esp_err_t DocMcp23008::ReadRegister(uint8_t reg, uint8_t* value) {
-    if (device_ == nullptr || value == nullptr) {
+    // DOC INÍCIO — validação separada de argumentos e estado
+    // Um ponteiro de saída nulo é erro de argumento; dispositivo ausente
+    // representa estado inválido do driver.
+    if (value == nullptr) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (device_ == nullptr) {
         return ESP_ERR_INVALID_STATE;
     }
+    // DOC FIM — validação separada de argumentos e estado
 
     return i2c_master_transmit_receive(
         device_, &reg, sizeof(reg), value, sizeof(*value), MCP23008_TIMEOUT_MS);
