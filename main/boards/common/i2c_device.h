@@ -2,10 +2,16 @@
 #define I2C_DEVICE_H
 
 #include <driver/i2c_master.h>
+#include <stdint.h>
 
 class I2cDevice {
 public:
-    I2cDevice(i2c_master_bus_handle_t i2c_bus, uint8_t addr);
+    // DOC INÍCIO — velocidade configurável por dispositivo
+    // O padrão de 400 kHz preserva os chamadores existentes.
+    // Use 100000 para periféricos que precisem acompanhar o barramento do DOC.
+    I2cDevice(i2c_master_bus_handle_t i2c_bus, uint8_t addr,
+              uint32_t scl_speed_hz = 400000);
+    // DOC FIM — velocidade configurável por dispositivo
 
 protected:
     i2c_master_bus_handle_t i2c_bus_;
