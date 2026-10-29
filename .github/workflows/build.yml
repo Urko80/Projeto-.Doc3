@@ -10,6 +10,10 @@ on:
   pull_request:
     branches:
       - main
+      # DOC INÍCIO — Validar PRs encadeadas da integração do DOC.
+      - feature/doc-mcp23008-driver
+      - fix/doc-mcp23008-error-handling
+      # DOC FIM — Gatilhos para executar build nas PRs de driver e correções do DOC.
 
 permissions:
   contents: read
