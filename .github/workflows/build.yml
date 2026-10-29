@@ -18,6 +18,7 @@ on:
       - feature/doc-shared-i2c-bus
       - feature/doc-mcp23008-driver
       - fix/doc-mcp23008-error-handling
+      - fix/doc-mcp23008-deinitialize-errors # DOC: validar a última etapa do driver MCP23008
       # DOC FIM — Gatilhos para executar build nas PRs encadeadas do DOC.
 
 permissions:
