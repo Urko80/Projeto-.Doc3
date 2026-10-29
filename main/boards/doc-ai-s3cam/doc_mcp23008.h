@@ -28,7 +28,8 @@ public:
     esp_err_t ReadPin(uint8_t pin, bool* level);
 
     // Remove somente o dispositivo MCP23008, nunca o barramento global.
-    void Deinitialize();
+    // Retorna o erro para que o chamador possa tratar ou repetir a operação.
+    esp_err_t Deinitialize();
 
 private:
     esp_err_t ReadRegister(uint8_t reg, uint8_t* value);
