@@ -15,6 +15,7 @@ on:
       - feature/doc-camera-restore
       - feature/doc-mcp23008-driver
       - fix/doc-mcp23008-error-handling
+      - fix/doc-mcp23008-deinitialize-errors # DOC: validar a etapa final do MCP23008
       # DOC FIM — Gatilhos de compilação para as PRs encadeadas do DOC.
 
 permissions:
