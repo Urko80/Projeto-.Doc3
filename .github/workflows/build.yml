@@ -10,10 +10,17 @@ on:
   pull_request:
     branches:
       - main
-      # DOC INÍCIO — Validar PRs que usam a interface web embutida como base.
+      # DOC INÍCIO — Validar PRs encadeadas da integração do DOC.
+      - feature/ttp223-integration-plan
+      - fix/doc-i2c-startup-cleanup
+      - fix/doc-web-api-start-result
+      - feature/doc-i2c-device-speed-config
+      - feature/doc-shared-i2c-bus
+      - feature/doc-mcp23008-driver
+      - fix/doc-mcp23008-error-handling
       - feature/doc-embedded-web-ui
       - feature/doc-camera-restore
-      # DOC FIM — Gatilho de compilação para a linha de integração do DOC.
+      # DOC FIM — Gatilhos para executar build nas PRs encadeadas do DOC.
 
 permissions:
   contents: read
