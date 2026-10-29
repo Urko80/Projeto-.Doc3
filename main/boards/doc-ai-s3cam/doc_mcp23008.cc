@@ -18,10 +18,20 @@ static const char* TAG = "doc_mcp23008";
 
 // DOC INÍCIO — ciclo de vida do dispositivo MCP23008
 DocMcp23008::~DocMcp23008() {
-    // A rotina registra a falha e mantém o handle enquanto o objeto existir.
-    // Em encerramento explícito, o chamador pode verificar o esp_err_t e tentar
-    // novamente antes de destruir a instância.
-    (void)Deinitialize();
+    // DOC INÍCIO — limpeza final de melhor esforço
+    // O destrutor não pode devolver o erro ao chamador nem manter o objeto vivo.
+    // Por isso, o código que controla o ciclo de vida DEVE chamar Deinitialize()
+    // explicitamente e tratar o retorno antes de destruir esta instância.
+    // Esta chamada é apenas uma última tentativa para evitar deixar o dispositivo
+    // registrado quando a limpeza explícita foi esquecida.
+    const esp_err_t err = Deinitialize();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG,
+                 "Limpeza final do MCP23008 falhou (%s). "
+                 "A falha deveria ter sido tratada antes do destrutor.",
+                 esp_err_to_name(err));
+    }
+    // DOC FIM — limpeza final de melhor esforço
 }
 
 esp_err_t DocMcp23008::Initialize(i2c_master_bus_handle_t bus, uint8_t address) {
